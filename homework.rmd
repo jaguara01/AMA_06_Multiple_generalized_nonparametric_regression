@@ -1,0 +1,236 @@
+---
+title: "GAM Fits for Hirsutism Data"
+author: "Azzarito Domenico, Daniel Reverter, Alexis Vendrix"
+output:
+  pdf_document:
+    toc: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document performs Generalized Additive Model (GAM) analysis on hirsutism clinical trial data. The goal is to model the Ferriman-Gallwey score at 12 months (`FGm12`) as a function of baseline measurements and treatment levels.
+
+## 1. Data Loading and Cleaning
+
+We begin by loading the hirsutism dataset and preparing it for analysis. This includes converting the treatment variable to a factor and handling missing or erroneous values.
+
+```{r load_data, message=FALSE, warning=FALSE}
+library(mgcv)
+```
+
+```{r prepare_data}
+# Load the dataset. 
+hirs <- read.table("hirsutism.dat", header = TRUE, sep = "\t", fill = TRUE)
+
+# Convert Treatment to factor. 
+hirs$Treatment <- as.factor(hirs$Treatment)
+
+# Correct erroneous negative FGm12 values.
+neg_idx <- which(hirs$FGm12 < 0)
+hirs$FGm12[neg_idx] <- 0
+
+# Remove observations with missing values. 
+hirs <- na.omit(hirs)
+```
+
+```{r data_summary, echo=FALSE}
+# Treatment counts table
+knitr::kable(
+  table(hirs$Treatment),
+  caption = "Treatment Group Counts",
+  align = "c",
+  col.names = c("Value", "Frequency")
+)
+
+knitr::kable(
+  summary(hirs[, c("FGm0", "FGm12", "SysPres", "DiaPres", "weight", "height")]),
+  caption = "Summary Statistics of Key Variables",
+  align = "c"
+)
+```
+
+## 2. Exploratory Data Analysis
+
+Here, we explore the relationships between predictors and the response variable through visualizations and correlation analysis.
+
+```{r eda_boxplots, fig.width=10, fig.height=4, echo=FALSE}
+par(mfrow = c(1, 4))
+
+for (i in 0:3) {
+  boxplot(hirs[hirs$Treatment == i, c("FGm0", "FGm12")],
+          ylim = c(0, 30),
+          main = paste("Treatment", i),
+          col = c("lightblue", "lightgreen"),
+          cex.main = 1.2)
+}
+```
+
+```{r correlation_analysis}
+# Compute correlations between numeric predictors and FGm12. 
+numeric_vars <- hirs[, c("FGm0", "SysPres", "DiaPres", "weight", "height", "FGm12")]
+cor_with_target <- cor(numeric_vars, method = "pearson")[, "FGm12"]
+```
+
+```{r cor_table, echo=FALSE}
+knitr::kable(
+  data.frame(Variable = names(cor_with_target[-6]), 
+             Correlation = round(cor_with_target[-6], 3)),
+  caption = "Pearson Correlations with FGm12",
+  align = c("l", "c"),
+  row.names = FALSE
+)
+```
+
+The correlations are relatively low, suggesting that linear relationships alone may not capture the underlying patterns. This motivates the use of GAMs with smooth terms.
+
+## 3. Model Fitting
+
+We fit several GAM models of increasing complexity, starting from a simple linear model and progressively adding smooth terms and interactions.
+
+```{r set_seed}
+set.seed(123)
+```
+
+```{r fit_linear_model}
+# Model 0: Linear model (baseline). 
+gam0 <- gam(FGm12 ~ FGm0 + SysPres + DiaPres + weight + height + Treatment, 
+            data = hirs)
+```
+
+```{r fit_gam_models}
+# Model 1: Full additive model with smooth terms.
+gam1 <- gam(FGm12 ~ s(FGm0) + s(SysPres) + s(DiaPres) + s(weight) + s(height) + Treatment,
+            data = hirs)
+
+# Model 2: Treatment-specific smooths for FGm0. 
+gam2 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(DiaPres) + s(weight) + s(height) + Treatment,
+            data = hirs)
+
+# Model 3: Reduced model (remove non-significant DiaPres).
+gam3 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(weight) + s(height) + Treatment,
+            data = hirs)
+
+# Model 4: Further reduction (remove height).
+gam4 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(weight) + Treatment,
+            data = hirs)
+
+# Model 5: Minimal smooth model.
+gam5 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + Treatment,
+            data = hirs)
+
+# Model 6: Only FGm0 smooth by Treatment.
+gam6 <- gam(FGm12 ~ s(FGm0, by = Treatment) + Treatment,
+            data = hirs)
+```
+
+```{r fit_tensor_models}
+# Model 7: Tensor product for DiaPres and weight.
+gam7 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + te(DiaPres, weight) + Treatment,
+            data = hirs)
+
+# Model 8: Two tensor products (best candidate).
+gam8 <- gam(FGm12 ~ s(FGm0, by = Treatment) + te(DiaPres, weight) + te(SysPres, height) + Treatment,
+            data = hirs)
+```
+
+## 4. Model Selection
+
+We compare models using GCV scores and ANOVA to identify the best-fitting model.
+
+```{r model_comparison}
+# Extract GCV scores for comparison.
+gcv_scores <- c(
+  Linear = gam0$gcv.ubre,
+  GAM1 = gam1$gcv.ubre,
+  GAM2 = gam2$gcv.ubre,
+  GAM3 = gam3$gcv.ubre,
+  GAM4 = gam4$gcv.ubre,
+  GAM5 = gam5$gcv.ubre,
+  GAM6 = gam6$gcv.ubre,
+  GAM7 = gam7$gcv.ubre,
+  GAM8 = gam8$gcv.ubre
+)
+```
+
+```{r gcv_table, echo=FALSE}
+knitr::kable(
+  data.frame(Model = substr(names(gcv_scores), 1, nchar(names(gcv_scores)) - 7), GCV = round(gcv_scores, 3)),
+  caption = "GCV Scores Across Models (Lower is Better)",
+  align = c("l", "c"),
+  row.names = FALSE
+)
+```
+
+```{r anova_test}
+# ANOVA comparison of nested models.
+anova(gam5, gam7, gam8, gam4, gam3, gam2, gam0, test = "F")
+```
+
+The ANOVA table reveals significant improvements when moving from simpler to more complex models. Notably, the transition from GAM5 to GAM7 (adding `te(DiaPres, weight)`) and from GAM7 to GAM8 (adding `te(SysPres, height)`) both show significant F-statistics (p \< 0. 05). The comparison also confirms that the linear model (gam0) is significantly outperformed by the GAM alternatives (p \< 0.001).
+
+Based on the lowest GCV score (20.922) and ANOVA results, **Model 8** (`gam8`) is selected as the best model. It achieves 72.6% deviance explained through treatment-specific smooths for `FGm0` and tensor product interactions.
+
+## 5. Final Model Examination
+
+We examine the selected model in detail using summary statistics, smooth plots, and diagnostic checks.
+
+```{r final_summary}
+summary(gam8)
+```
+
+The model summary reveals:
+
+-   **Parametric coefficients**: Treatment1 (p = 0.014) and Treatment3 (p = 0.038) show significant reductions in FGm12 scores relative to the control group. Treatment2 does not reach statistical significance (p = 0.165).
+-   **Smooth terms**: `s(FGm0):Treatment1` and `s(FGm0):Treatment3` are significant, indicating nonlinear baseline effects for these treatment groups. The tensor product `te(DiaPres, weight)` is significant (p = 0.016), while `te(SysPres, height)` is marginally significant (p = 0.057).
+
+```{r smooth_plots, fig.width=12, fig.height=8, echo=FALSE}
+plot(gam8, pages = 1, residuals = TRUE, shade = TRUE, cex = 2, lwd = 2)
+```
+
+The smooth plots reveal:
+
+-   **Treatment 0 and 2**: Flat effects of `FGm0` (edf $\approx$ 1), indicating essentially linear or no relationship between baseline hirsutism and final outcome for these groups.
+-   **Treatment 1**: A nonlinear pattern (edf = 4.54) with higher `FGm12` values at elevated baseline levels.
+-   **Treatment 3**: The most complex relationship (edf = 5.86) showing strong nonlinear dependence on baseline severity.
+-   **Tensor products**: Capture complex interactions, with `te(DiaPres, weight)` using 11.8 effective degrees of freedom.
+
+```{r vis_gam_plots, fig.width=12, fig.height=4, echo=FALSE}
+par(mfrow = c(1, 2))
+
+vis.gam(gam8, view = c("DiaPres", "weight"), 
+        theta = 40, phi = 25, r = sqrt(3), d = 1,
+        main = "Interaction: DiaPres x Weight")
+
+vis.gam(gam8, view = c("SysPres", "height"), 
+        theta = 40, phi = 25, r = sqrt(3), d = 1,
+        main = "Interaction: SysPres x Height")
+```
+
+```{r diagnostics, fig.width=10, fig.height=8, echo=FALSE}
+par(mfrow = c(2, 2))
+gam.check(gam8)
+```
+
+The diagnostic plots indicate:
+
+-   **Q-Q plot**: Residuals follow theoretical quantiles reasonably well, with minor deviations at the tails.
+-   **Residuals vs. fitted**: No systematic patterns, suggesting homoscedasticity.
+-   **Histogram**: Approximately normal distribution of residuals.
+-   **Response vs. fitted**: Positive correlation between observed and predicted values.
+
+The basis dimension check shows adequate k values for most smooth terms (k-index \> 1). However, `te(SysPres, height)` displays a k-index of 0.86 with p = 0.03, suggesting potential under-smoothing. Since the effective degrees of freedom (edf = 8.89) is well below the basis dimension (k' = 24), this is likely a minor concern and no corrective action is required.
+
+## 6. Concluding Remarks
+
+The Generalized Additive Model analysis demonstrates that smooth terms and tensor product interactions substantially improve model fit compared to a simple linear model. The final model (`gam8`) achieves the lowest GCV score (20.922) and explains 72.6% of the variability in `FGm12` by:
+
+-   Modeling treatment-specific nonlinear effects of baseline hirsutism levels (`FGm0`).
+-   Capturing interactions between physiological variables (`DiaPres × weight` and `SysPres × height`) through tensor product smooths.
+
+Key findings from the clinical perspective:
+
+-   **Treatment efficacy varies**: Treatments 1 and 3 show statistically significant reductions in Ferriman-Gallwey scores relative to the control group, while Treatment 2 does not reach significance.
+-   **Baseline severity matters differently by treatment**: For Treatments 0 and 2, baseline hirsutism has minimal impact on final outcomes. For Treatments 1 and 3, participants with higher baseline FG values show stronger nonlinear responses, suggesting these treatments may be more effective for patients with moderate baseline severity.
+-   **Physiological interactions**: The significant interaction between diastolic blood pressure and weight suggests that body composition and cardiovascular factors may influence treatment response, warranting further clinical investigation.
