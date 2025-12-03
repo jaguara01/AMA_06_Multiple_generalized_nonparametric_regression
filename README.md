@@ -1,0 +1,2 @@
+# AMA_06_Multiple_generalized_nonparametric_regression
+Multiple (generalized) nonparametric regression
