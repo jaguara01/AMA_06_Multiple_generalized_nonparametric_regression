@@ -69,7 +69,8 @@ for (i in 0:3) {
 
 ```{r correlation_analysis}
 # Compute correlations between numeric predictors and FGm12. 
-numeric_vars <- hirs[, c("FGm0", "SysPres", "DiaPres", "weight", "height", "FGm12")]
+numeric_vars <- hirs[, c("FGm0", "SysPres", "DiaPres", 
+                         "weight", "height", "FGm12")]
 cor_with_target <- cor(numeric_vars, method = "pearson")[, "FGm12"]
 ```
 
@@ -101,16 +102,16 @@ gam0 <- gam(FGm12 ~ FGm0 + SysPres + DiaPres + weight + height + Treatment,
 
 ```{r fit_gam_models}
 # Model 1: Full additive model with smooth terms.
-gam1 <- gam(FGm12 ~ s(FGm0) + s(SysPres) + s(DiaPres) + s(weight) + s(height) + Treatment,
-            data = hirs)
+gam1 <- gam(FGm12 ~ s(FGm0) + s(SysPres) + s(DiaPres) + s(weight) + s(height)
+            + Treatment, data = hirs)
 
 # Model 2: Treatment-specific smooths for FGm0. 
-gam2 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(DiaPres) + s(weight) + s(height) + Treatment,
-            data = hirs)
+gam2 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(DiaPres) + s(weight)
+            + s(height) + Treatment, data = hirs)
 
 # Model 3: Reduced model (remove non-significant DiaPres).
-gam3 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(weight) + s(height) + Treatment,
-            data = hirs)
+gam3 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(weight) + s(height)
+            + Treatment, data = hirs)
 
 # Model 4: Further reduction (remove height).
 gam4 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + s(weight) + Treatment,
@@ -127,12 +128,12 @@ gam6 <- gam(FGm12 ~ s(FGm0, by = Treatment) + Treatment,
 
 ```{r fit_tensor_models}
 # Model 7: Tensor product for DiaPres and weight.
-gam7 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) + te(DiaPres, weight) + Treatment,
-            data = hirs)
+gam7 <- gam(FGm12 ~ s(FGm0, by = Treatment) + s(SysPres) +
+              te(DiaPres, weight) + Treatment, data = hirs)
 
 # Model 8: Two tensor products (best candidate).
-gam8 <- gam(FGm12 ~ s(FGm0, by = Treatment) + te(DiaPres, weight) + te(SysPres, height) + Treatment,
-            data = hirs)
+gam8 <- gam(FGm12 ~ s(FGm0, by = Treatment) + te(DiaPres, weight) +
+              te(SysPres, height) + Treatment, data = hirs)
 ```
 
 ## 4. Model Selection
@@ -156,7 +157,8 @@ gcv_scores <- c(
 
 ```{r gcv_table, echo=FALSE}
 knitr::kable(
-  data.frame(Model = substr(names(gcv_scores), 1, nchar(names(gcv_scores)) - 7), GCV = round(gcv_scores, 3)),
+  data.frame(Model = substr(names(gcv_scores), 1, nchar(names(gcv_scores)) - 7),
+             GCV = round(gcv_scores, 3)),
   caption = "GCV Scores Across Models (Lower is Better)",
   align = c("l", "c"),
   row.names = FALSE
