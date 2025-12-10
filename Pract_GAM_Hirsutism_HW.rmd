@@ -184,11 +184,11 @@ summary(gam8)
 
 The model summary reveals:
 
--   **Parametric coefficients**: Treatment1 (p = 0.014) and Treatment3 (p = 0.038) show significant reductions in FGm12 scores relative to the control group. Treatment2 does not reach statistical significance (p = 0.165).
+-   **Parametric coefficients**: Treatment1 (p = 0.014) and Treatment3 (p = 0.038) show significant reductions in FGm12 scores relative to the control group. Treatment2 does not reach statistical significance (p = 0.165).The `te(SysPres,height)` is borderline significant but we will consider it because we show afterward that there is an improvement from Gam7 to Gam8.
 -   **Smooth terms**: `s(FGm0):Treatment1` and `s(FGm0):Treatment3` are significant, indicating nonlinear baseline effects for these treatment groups. The tensor product `te(DiaPres, weight)` is significant (p = 0.016), while `te(SysPres, height)` is marginally significant (p = 0.057).
 
 ```{r smooth_plots, fig.width=12, fig.height=8, echo=FALSE}
-plot(gam8, pages = 1, residuals = TRUE, shade = TRUE, cex = 2, lwd = 2)
+plot(gam8, pages = 1,scale=0, residuals = TRUE, shade = TRUE, cex = 2, lwd = 2)
 ```
 
 The smooth plots reveal:
@@ -222,7 +222,7 @@ The diagnostic plots indicate:
 -   **Histogram**: Approximately normal distribution of residuals.
 -   **Response vs. fitted**: Positive correlation between observed and predicted values.
 
-The basis dimension check shows adequate k values for most smooth terms (k-index \> 1). However, `te(SysPres, height)` displays a k-index of 0.86 with p = 0.03, suggesting potential under-smoothing. Since the effective degrees of freedom (edf = 8.89) is well below the basis dimension (k' = 24), this is likely a minor concern and no corrective action is required.
+The basis dimension check shows adequate k values for most smooth terms (k-index \> 1). However, `te(SysPres, height)` displays a k-index of 0.86 with p = 0.03, suggesting potential under-smoothing and over-fitting given the sample size of 91 observations. Since the effective degrees of freedom (edf = 8.89) is well below the basis dimension (k' = 24), this is likely a minor concern and no corrective action is required.
 
 ## 6. Concluding Remarks
 
